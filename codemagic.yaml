@@ -1,0 +1,58 @@
+workflows:
+  ios-unsigned:
+    name: Build iOS Unsigned IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      vars:
+        XCODE_PROJECT: "Unity-iPhone.xcodeproj"
+        XCODE_SCHEME: "Unity-iPhone"
+        CONFIG: "Release"
+        IPA_NAME: "Unity-iPhone-unsigned.ipa"
+    scripts:
+      - name: Pull Git LFS files
+        script: |
+          echo "=== Pulling Git LFS files ==="
+          git lfs pull
+
+      - name: Fix file permissions
+        script: |
+          echo "=== Granting execution permissions ==="
+          chmod -R +x . || true
+          chmod +x process_symbols.sh || true
+
+      - name: Show Xcode & SDK version
+        script: |
+          xcodebuild -version
+          xcodebuild -showsdks
+
+      - name: Build Xcode archive (Unsigned)
+        script: |
+          set -e
+          echo "=== Archiving Unity-iPhone (Unsigned) ==="
+          xcodebuild archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration "$CONFIG" \
+            -destination 'generic/platform=iOS' \
+            -archivePath "build/Unity-iPhone.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package Unsigned IPA
+        script: |
+          set -e
+          echo "=== Packaging .app into Unsigned .ipa ==="
+          mkdir -p build/Payload
+          cp -R build/Unity-iPhone.xcarchive/Products/Applications/*.app build/Payload/
+          cd build
+          zip -r -y "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+          echo "Unsigned IPA created successfully: $(pwd)/$IPA_NAME"
+
+    artifacts:
+      - build/*.ipa
